@@ -1,45 +1,40 @@
 // App.js
-import React from 'react';
+
+import React, { useContext } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { NavigationContainer, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
-import { Provider as PaperProvider, DefaultTheme as PaperDefaultTheme } from 'react-native-paper';
-import StackNavigator from './navigation/StackNavigator';
+import { NavigationContainer } from '@react-navigation/native';
+import { Provider as PaperProvider, DefaultTheme } from 'react-native-paper';
+import { SessionProvider, SessionContext } from './contexts/SessionContext';
+import AuthStackNavigator from './navigation/AuthStackNavigator';
+import MainTabNavigator from './navigation/MainTabNavigator';
 
-const CustomDefaultTheme = {
-  ...PaperDefaultTheme,
-  ...NavigationDefaultTheme,
+const theme = {
+  ...DefaultTheme,
   colors: {
-    ...PaperDefaultTheme.colors,
-    ...NavigationDefaultTheme.colors,
+    ...DefaultTheme.colors,
     primary: '#4CAF50',
-    background: '#FFFFFF', // Light background
-    text: '#000000',       // Black text
-  },
-};
-
-const CustomDarkTheme = {
-  ...PaperDefaultTheme,
-  ...NavigationDefaultTheme,
-  colors: {
-    ...PaperDefaultTheme.colors,
-    ...NavigationDefaultTheme.colors,
-    primary: '#4CAF50',
-    background: '#000000', // Dark background
-    text: '#FFFFFF',       // White text
+    background: '#FFFFFF',
+    text: '#000000',
   },
 };
 
 export default function App() {
-  // For simplicity, we'll use the light theme
-  const theme = CustomDefaultTheme;
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PaperProvider theme={theme}>
-        <NavigationContainer theme={theme}>
-          <StackNavigator />
-        </NavigationContainer>
-      </PaperProvider>
+      <SessionProvider>
+        <PaperProvider theme={theme}>
+          <NavigationContainer>
+            <RootNavigator />
+          </NavigationContainer>
+        </PaperProvider>
+      </SessionProvider>
     </GestureHandlerRootView>
   );
+}
+
+function RootNavigator() {
+  const { session } = useContext(SessionContext);
+
+  // Navigate to MainTabNavigator if authenticated, else AuthStackNavigator
+  return session && session.user ? <MainTabNavigator /> : <AuthStackNavigator />;
 }

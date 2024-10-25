@@ -1,7 +1,5 @@
-// components/Background.js
-
 import React from 'react';
-import { ImageBackground, StyleSheet } from 'react-native';
+import { ImageBackground, StyleSheet, View } from 'react-native';
 
 export default function Background({ children }) {
   return (
@@ -10,7 +8,9 @@ export default function Background({ children }) {
       style={styles.background}
       imageStyle={styles.image}
     >
-      {children}
+      <View style={{ flex: 1 }}>
+        {children}
+      </View>
     </ImageBackground>
   );
 }

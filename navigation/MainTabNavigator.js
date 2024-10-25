@@ -1,5 +1,3 @@
-// navigation/MainTabNavigator.js
-
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -33,7 +31,7 @@ export default function MainTabNavigator() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="chart-line" color={color} size={size} />
           ),
-          headerShown: false, // Hide header for nested stack
+          headerShown: false,
         }}
       />
       <Tab.Screen
