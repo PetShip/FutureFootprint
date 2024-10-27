@@ -1,12 +1,10 @@
 // App.js
-
-import React, { useContext } from 'react';
+import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { Provider as PaperProvider, DefaultTheme } from 'react-native-paper';
-import { SessionProvider, SessionContext } from './contexts/SessionContext';
-import AuthStackNavigator from './navigation/AuthStackNavigator';
-import MainTabNavigator from './navigation/MainTabNavigator';
+import { SessionProvider } from './contexts/SessionContext';
+import RootNavigator from './RootNavigator';
 
 const theme = {
   ...DefaultTheme,
@@ -30,11 +28,4 @@ export default function App() {
       </SessionProvider>
     </GestureHandlerRootView>
   );
-}
-
-function RootNavigator() {
-  const { session } = useContext(SessionContext);
-
-  // Navigate to MainTabNavigator if authenticated, else AuthStackNavigator
-  return session && session.user ? <MainTabNavigator /> : <AuthStackNavigator />;
 }
