@@ -1,4 +1,5 @@
 // navigation/MainTabNavigator.js
+
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,8 +9,21 @@ import ImpactStackNavigator from './ImpactStackNavigator';
 import PostScreen from '../screens/PostScreen';
 import SustainableAlternativesScreen from '../screens/SustainableAlternativesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import { createStackNavigator } from '@react-navigation/stack';
 
 const Tab = createBottomTabNavigator();
+const ProfileStack = createStackNavigator();
+
+// Profile Stack Navigator
+function ProfileStackNavigatorComponent() {
+  return (
+    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
+    </ProfileStack.Navigator>
+  );
+}
 
 export default function MainTabNavigator() {
   return (
@@ -32,7 +46,6 @@ export default function MainTabNavigator() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="chart-line" color={color} size={size} />
           ),
-          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -57,7 +70,7 @@ export default function MainTabNavigator() {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileStackNavigatorComponent}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (

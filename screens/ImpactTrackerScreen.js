@@ -1,17 +1,16 @@
 // screens/ImpactTrackerScreen.js
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Button, Modal, Portal, IconButton, useTheme } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, Pressable } from 'react-native';
+import { Text, Button, Modal, Portal, IconButton, useTheme, ActivityIndicator } from 'react-native-paper';
 import Background from '../components/Background';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import LineChart from '../components/ImpactChart';
 import BadgeComponent from '../components/BadgeComponent';
 import MetricExplanationModal from '../components/MetricExplanationModal';
 import WeekNavigation from '../components/WeekNavigation';
+import ImpactChart from '../components/ImpactChart';
 import { getStartOfCurrentWeek } from '../utils/dateHelpers';
 import { defaultFootprintFactors } from '../utils/defaultFootprint';
-import ImpactChart from '../components/ImpactChart';  // <-- Import ImpactChart
+import { supabase } from '../supabase';
 
 export default function ImpactTrackerScreen({ navigation }) {
   const theme = useTheme();
@@ -24,6 +23,7 @@ export default function ImpactTrackerScreen({ navigation }) {
   const [showExplanation, setShowExplanation] = useState(false);
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState(getStartOfCurrentWeek());
   const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   // Function to calculate default impact based on age and sex
   const calculateDefaultImpact = (profile) => {
@@ -39,29 +39,62 @@ export default function ImpactTrackerScreen({ navigation }) {
     return baseImpact; // kg CO₂ per day based on age and sex
   };
 
-  // Function to fetch user profile
-  const getUserProfile = async () => {
-    const userProfile = await AsyncStorage.getItem('userProfile');
-    return userProfile ? JSON.parse(userProfile) : null;
-  };
-
-  const loadImpactData = useCallback(async () => {
+  // Function to fetch user profile from Supabase
+  const getUserProfile = useCallback(async () => {
     try {
-      const existingActions = await AsyncStorage.getItem('userActions');
-      const actions = existingActions ? JSON.parse(existingActions) : [];
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, sex, birthday')
+        .eq('id', supabase.auth.user().id)
+        .single();
+
+      if (error) throw error;
+
+      // Calculate age from birthday
+      const today = new Date();
+      const birthDate = new Date(data.birthday);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+
+      const profile = { ...data, age };
+      setUserProfile(profile);
+    } catch (error) {
+      console.error('Error fetching user profile:', error.message);
+      Alert.alert('Error fetching user profile', error.message);
+    }
+  }, []);
+
+  // Function to load impact data from Supabase
+  const loadImpactData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: actions, error } = await supabase
+        .from('actions')
+        .select('*')
+        .eq('user_id', supabase.auth.user().id);
+
+      if (error) throw error;
 
       // Get user profile
-      const profile = userProfile || (await getUserProfile());
+      if (!userProfile) {
+        await getUserProfile();
+      }
 
       // If no actions, use default impact based on age and sex
-      if (actions.length === 0 && profile) {
-        const defaultImpact = calculateDefaultImpact(profile);
-        actions.push({
-          id: 'default',
-          date: new Date().toISOString(),
-          impactValue: defaultImpact,
-          isDefault: true,
-        });
+      let allActions = actions;
+      if (actions.length === 0 && userProfile) {
+        const defaultImpact = calculateDefaultImpact(userProfile);
+        allActions = [
+          {
+            id: 'default',
+            date: new Date().toISOString(),
+            impact_value: defaultImpact,
+            isDefault: true,
+          },
+        ];
       }
 
       // Filter actions for the current week
@@ -69,47 +102,121 @@ export default function ImpactTrackerScreen({ navigation }) {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 7);
 
-      const weekActions = actions.filter(action => {
+      const weekActions = allActions.filter((action) => {
         const actionDate = new Date(action.date);
         return actionDate >= weekStart && actionDate < weekEnd;
       });
 
       let dailyEmissions = [0, 0, 0, 0, 0, 0, 0];
-      weekActions.forEach(action => {
+      weekActions.forEach((action) => {
         const actionDate = new Date(action.date);
         const dayIndex = (actionDate.getDay() + 6) % 7; // Monday = 0
-        dailyEmissions[dayIndex] += action.impactValue;
+        dailyEmissions[dayIndex] += action.impact_value;
       });
 
-      setChartData(dailyEmissions.map(value => convertMetric(value)));
+      setChartData(dailyEmissions.map((value) => convertMetric(value)));
       setImpactData({ totalEmissions: dailyEmissions.reduce((a, b) => a + b, 0) });
     } catch (error) {
-      console.error(error);
+      console.error('Error loading impact data:', error.message);
+      Alert.alert('Error loading impact data', error.message);
+    } finally {
+      setLoading(false);
     }
-  }, [currentWeekStartDate, userProfile]);
+  }, [currentWeekStartDate, userProfile, getUserProfile]);
 
-  const loadBadges = useCallback(() => {
-    // Implement badge loading logic here
-    // Example:
-    // setBadges([...]);
+  // Function to load earned badges from Supabase
+  const loadBadges = useCallback(async () => {
+    try {
+      const { data: earnedBadges, error } = await supabase
+        .from('user_badges')
+        .select('badge_id, badges(name, description, icon_url)')
+        .eq('user_id', supabase.auth.user().id)
+        .order('awarded_at', { ascending: false });
+
+      if (error) throw error;
+
+      setBadges(earnedBadges.map((ub) => ub.badges));
+    } catch (error) {
+      console.error('Error loading badges:', error.message);
+      Alert.alert('Error loading badges', error.message);
+    }
   }, []);
 
+  // Function to check and award new badges
+  const checkForNewBadges = useCallback(async () => {
+    try {
+      // Example: Award 'First Action' badge
+      const { data: actions, error: actionsError } = await supabase
+        .from('actions')
+        .select('*')
+        .eq('user_id', supabase.auth.user().id);
+
+      if (actionsError) throw actionsError;
+
+      if (actions.length === 1) {
+        // User has logged their first action
+        // Award 'First Action' badge
+        const { data: badgeData, error: badgeError } = await supabase
+          .from('badges')
+          .select('id')
+          .eq('name', 'First Action')
+          .single();
+
+        if (badgeError) throw badgeError;
+
+        // Check if badge already awarded
+        const { data: userBadgeData, error: userBadgeError } = await supabase
+          .from('user_badges')
+          .select('*')
+          .eq('user_id', supabase.auth.user().id)
+          .eq('badge_id', badgeData.id)
+          .single();
+
+        if (userBadgeError && userBadgeError.code !== 'PGRST116') { // PGRST116: no rows found
+          throw userBadgeError;
+        }
+
+        if (!userBadgeData) {
+          // Award the badge
+          const { error: awardError } = await supabase.from('user_badges').insert([
+            {
+              user_id: supabase.auth.user().id,
+              badge_id: badgeData.id,
+            },
+          ]);
+
+          if (awardError) throw awardError;
+
+          Alert.alert('Congratulations!', 'You have earned the "First Action" badge!');
+          loadBadges(); // Refresh badges
+        }
+      }
+
+      // Add more badge checks here based on your badge criteria
+    } catch (error) {
+      console.error('Error checking for new badges:', error.message);
+      Alert.alert('Error checking for new badges', error.message);
+    }
+  }, [loadBadges]);
+
+  // Effect to fetch user profile on component mount
   useEffect(() => {
     const fetchUserProfile = async () => {
-      const profile = await getUserProfile();
-      setUserProfile(profile);
+      await getUserProfile();
     };
 
     fetchUserProfile();
-  }, []);
+  }, [getUserProfile]);
 
+  // Effect to load data when screen is focused
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadImpactData();
       loadBadges();
+      checkForNewBadges();
     });
     return unsubscribe;
-  }, [navigation, loadImpactData, loadBadges]);
+  }, [navigation, loadImpactData, loadBadges, checkForNewBadges]);
 
   const convertMetric = (value) => {
     if (metric === 'CO₂') {
@@ -145,10 +252,6 @@ export default function ImpactTrackerScreen({ navigation }) {
     setCurrentWeekStartDate(newStartDate);
   };
 
-  useEffect(() => {
-    loadImpactData();
-  }, [currentWeekStartDate, loadImpactData]);
-
   return (
     <Background>
       <ScrollView contentContainerStyle={styles.container}>
@@ -164,9 +267,9 @@ export default function ImpactTrackerScreen({ navigation }) {
         <MetricExplanationModal visible={showExplanation} onDismiss={() => setShowExplanation(false)} />
 
         {/* Toggle Metric Button */}
-        <TouchableOpacity onPress={toggleMetric} style={styles.toggleButton}>
+        <Pressable onPress={toggleMetric} style={styles.toggleButton}>
           <Text style={styles.toggleButtonText}>Switch Metric ({metric})</Text>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Display Default Footprint Information */}
         {userProfile && (
@@ -207,7 +310,11 @@ export default function ImpactTrackerScreen({ navigation }) {
         />
 
         {/* Impact Chart */}
-        <ImpactChart chartData={chartData} metric={metric} />
+        {loading ? (
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        ) : (
+          <ImpactChart chartData={chartData} metric={metric} />
+        )}
 
         {/* Buttons to Log Action and View Goals */}
         <Button
@@ -228,7 +335,7 @@ export default function ImpactTrackerScreen({ navigation }) {
         {/* Display Badges */}
         <Text style={[styles.subtitle, { color: theme.colors.text }]}>Your Badges</Text>
         <ScrollView horizontal contentContainerStyle={styles.badgesContainer}>
-          {badges.map(badge => (
+          {badges.map((badge) => (
             <BadgeComponent key={badge.id} badge={badge} />
           ))}
         </ScrollView>
@@ -245,42 +352,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    margin: 20,
-    borderRadius: 8,
-  },
-  modalTitle: {
-    fontSize: 20,
-    marginBottom: 10,
-    fontWeight: 'bold',
-  },
-  modalText: {
-    fontSize: 16,
-    marginBottom: 20,
-  },
   toggleButton: {
     marginVertical: 10,
     backgroundColor: '#81C784',
     padding: 10,
     borderRadius: 5,
     alignItems: 'center',
+    boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.25)', // Replace shadow props
   },
   toggleButtonText: {
     color: '#ffffff',
     fontWeight: 'bold',
+    verticalAlign: 'middle', // Replace textAlignVertical
   },
   metricsContainer: {
     marginVertical: 10,
   },
   metricText: {
     fontSize: 18,
-  },
-  weekNavigation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 10,
   },
   button: {
     marginVertical: 10,
@@ -298,14 +387,17 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: '#E8F5E9',
     borderRadius: 8,
+    boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.25)', // Replace shadow props
   },
   defaultFootprintTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 5,
+    verticalAlign: 'middle', // Replace textAlignVertical
   },
   defaultFootprintText: {
     fontSize: 16,
     marginBottom: 3,
+    verticalAlign: 'middle', // Replace textAlignVertical
   },
 });

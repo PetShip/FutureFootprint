@@ -1,32 +1,35 @@
-// LoginScreen.js
+// screens/LoginScreen.js
 
-import React, { useState } from 'react';
-import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useContext } from 'react';
+import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native'; // Import ActivityIndicator
 import { TextInput, Button, Text } from 'react-native-paper';
 import { supabase } from '../supabase';
+import { SessionContext } from '../contexts/SessionContext';
 import Background from '../components/Background';
 
 export default function LoginScreen({ navigation }) {
+  const { setSession } = useContext(SessionContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    setLoading(true);  // Start the loading indicator
+    setLoading(true);  // Starten der Ladeanzeige
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
       Alert.alert('Login Failed', error.message || 'An unexpected error occurred. Please try again.');
+      console.error('Login Error:', error.message);
     } else {
-      // Navigate to HomeScreen in MainTabNavigator after login
-      navigation.navigate('MainTabNavigator', { screen: 'Home' });
+      setSession(data.session);
+      // Navigation wird automatisch durch RootNavigator gehandhabt
     }
 
-    setLoading(false);  // Stop the loading indicator after login attempt
+    setLoading(false);  // Stoppen der Ladeanzeige
   };
 
   return (

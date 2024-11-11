@@ -7,9 +7,8 @@ import { Text } from 'react-native-paper';
 export default function BadgeComponent({ badge }) {
   return (
     <View style={styles.container}>
-      <Image source={badge.icon} style={styles.icon} />
+      <Image source={{ uri: badge.icon_url }} style={styles.image} />
       <Text style={styles.name}>{badge.name}</Text>
-      <Text style={styles.description}>{badge.description}</Text>
     </View>
   );
 }
@@ -17,23 +16,14 @@ export default function BadgeComponent({ badge }) {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    margin: 10,
-    padding: 10,
-    backgroundColor: '#e8f5e9',
-    borderRadius: 10,
+    marginHorizontal: 10,
   },
-  icon: {
-    width: 64,
-    height: 64,
+  image: {
+    width: 60,
+    height: 60,
   },
   name: {
-    fontSize: 16,
-    fontWeight: 'bold',
     marginTop: 5,
-  },
-  description: {
     textAlign: 'center',
-    marginTop: 5,
-    fontSize: 12,
   },
 });

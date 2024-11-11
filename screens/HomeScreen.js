@@ -1,12 +1,25 @@
-// HomeScreen.js
+// screens/HomeScreen.js
 
-import React, { useEffect, useState } from 'react';
-import { FlatList, View, StyleSheet, ActivityIndicator, Alert, Text, Image, Button } from 'react-native';
+import React, { useEffect, useState, useContext } from 'react';
+import {
+  FlatList,
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Text,
+  Image,
+  Button,
+} from 'react-native';
 import { supabase } from '../supabase';
+import { SessionContext } from '../contexts/SessionContext';
 
-export default function HomeScreen() { // Default export here
+export default function HomeScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Zugriff auf setSession und setProfile aus SessionContext
+  const { setSession, setProfile } = useContext(SessionContext);
 
   const fetchPosts = async () => {
     const { data, error } = await supabase
@@ -31,7 +44,11 @@ export default function HomeScreen() { // Default export here
     if (error) {
       Alert.alert('Logout Failed', error.message);
     } else {
-      Alert.alert('Logged out', 'You have been logged out successfully.');
+      // Reset session und profile im SessionContext
+      setSession(null);
+      setProfile(null);
+      // Optional: Bestätigung anzeigen oder auf den Login-Bildschirm verweisen
+      console.log('User signed out successfully');
     }
   };
 
